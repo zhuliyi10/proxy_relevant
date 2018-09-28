@@ -17,25 +17,32 @@ class XiciProxy(object):
         self.host = 'localhost'
         self.user = 'root'
         self.pwd = '123456'
-        self.table_name = 'xici'
+        self.table_name = 'xici3'
 
     def getProxyList(self, n):
         for i in range(1, n):
-            response = requests.get(self.url + str(i), headers=self.headers,proxies=self.proxies)
+            response = requests.get(self.url + str(i), headers=self.headers, proxies=self.proxies)
             self.parseHtml(response.text)
             print("get proxy success!")
 
     def parseHtml(self, html):
         selector = etree.HTML(html)
+        list = selector.xpath("//tr")
+        data = []
+        for tr in list[1:]:
+            ip = tr.xpath(".//td[2]/text()")[0]
+            port = tr.xpath(".//td[3]/text()")[0]
+            try:
+                site = tr.xpath(".//td[4]/a/text()")[0]
+            except Exception as e:
+                site = ""
+            high = tr.xpath(".//td[5]/text()")[0]
+            type = tr.xpath(".//td[6]/text()")[0]
+            item = {'ip': ip, 'port': port, 'site': site, 'high': high, 'type': type}
+            data.append(item)
+        self.writeList2Mysql(data)
 
-        iplist = selector.xpath('//tr/td[2]')
-        portlist = selector.xpath('//tr/td[3]')
-        sitelist = selector.xpath('//tr/td[4]')
-        highlist = selector.xpath('//tr/td[5]')
-        typelist = selector.xpath('//tr/td[6]')
-        self.write2mysql(iplist, portlist, sitelist, highlist, typelist)
-
-    def write2mysql(self, iplist, portlist, sitelist, highlist, typelist):
+    def writeList2Mysql(self, data):
         conn = pymysql.connect(
             self.host,
             self.user,
@@ -45,16 +52,22 @@ class XiciProxy(object):
         sql = 'create database if not exists {}'.format(self.db_name)
         cursor.execute(sql)
         cursor.execute("use {}".format(self.db_name))
-        sql = "create table if not exists {} (id INT AUTO_INCREMENT PRIMARY KEY,ip VARCHAR(20),port VARCHAR(10),site VARCHAR(20),high_conceal VARCHAR(10),type VARCHAR(10))".format(
+        sql = "create table if not exists {} (id INT AUTO_INCREMENT PRIMARY KEY,ip VARCHAR(20),port VARCHAR(10),site VARCHAR(20),high_conceal VARCHAR(10),type VARCHAR(10),available BOOLEAN)".format(
             self.table_name)
         cursor.execute(sql)
-        for ip, port, site, high, type in zip(iplist, portlist, sitelist, highlist, typelist):
-            if ip.text and port.text and site.text and high.text and type.text:
-                sql = "insert into {} (ip,port,site,high_conceal,type) values(%s,%s,%s,%s,%s)".format(self.table_name)
-                val = (ip.text, port.text, site.text, high.text, type.text)
+        for item in data:
+            sql = "select * from {} where ip='{}'".format(self.table_name, item['ip'])
+            cursor.execute(sql)
+            result = cursor.fetchone()
+            if result == None:
+                sql = "insert into {} (ip,port,site,high_conceal,type,available) values(%s,%s,%s,%s,%s,%c)".format(
+                    self.table_name)
+                val = (item['ip'], item['port'], item['site'], item['high'], item['type'], 1)
                 print(val)
                 cursor.execute(sql, val)
                 conn.commit()
+
+
 
 
 if __name__ == "__main__":
