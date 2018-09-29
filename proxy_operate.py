@@ -1,3 +1,5 @@
+import threading
+
 import pymysql
 import requests
 
@@ -15,6 +17,8 @@ class ProxyOperate(object):
             'ips_db',
         )
         self.cursor = self.conn.cursor()
+        self.threadLock = threading.Lock()
+        self.index = 0;
 
     def getRandomIp(self):
         sql = "select * from {} where available=1 order by rand() limit 1".format(self.table_name)
@@ -56,13 +60,13 @@ class ProxyOperate(object):
     def checkAllProxy(self):
         sql = "select * from {} where available=1".format(self.table_name)
         self.cursor.execute(sql)
-        results = self.cursor.fetchall()
-        for result in results:
-            print(result)
-            available = self.judge_ip(result[-2].lower(), result[1], result[2])
-            if not available:
-                self.available_ip(result[1])
-                # self.delete_ip(result[1])
+        self.results = self.cursor.fetchall()
+        self.index = 0
+        threads = [threading.Thread(target=self.run) for i in range(10)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
 
     def available_ip(self, ip):
         sql = "update {} set available={} where ip='{}'".format(self.table_name, 0, ip)
@@ -76,8 +80,21 @@ class ProxyOperate(object):
         self.conn.commit()
         print(self.cursor.rowcount, " 条记录删除成功")
 
+    def run(self):
+        while self.index < len(self.results):
+            result = self.results[self.index]
+            self.index = self.index + 1
+            print(result)
+            available = self.judge_ip(result[-2].lower(), result[1], result[2])
+            if not available:
+                self.threadLock.acquire()
+                self.available_ip(result[1])
+                self.threadLock.release()
+
 
 if __name__ == '__main__':
+    print("开始处理")
     operate = ProxyOperate()
-    # operate.checkAllProxy()
-    operate.checkRandomProxy()
+    operate.checkAllProxy()
+    # operate.checkRandomProxy()
+    print("处理结束")

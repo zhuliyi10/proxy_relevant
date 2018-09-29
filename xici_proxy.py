@@ -72,4 +72,4 @@ class XiciProxy(object):
 
 if __name__ == "__main__":
     xici = XiciProxy()
-    xici.getProxyList(10)
+    xici.getProxyList(20)
