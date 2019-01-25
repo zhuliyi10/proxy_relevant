@@ -17,11 +17,11 @@ class XiciProxy(object):
         self.host = 'localhost'
         self.user = 'root'
         self.pwd = '123456'
-        self.table_name = 'xici3'
+        self.table_name = 'train12306'
 
     def getProxyList(self, n):
         for i in range(1, n):
-            response = requests.get(self.url + str(i), headers=self.headers, proxies=self.proxies)
+            response = requests.get(self.url + str(i), headers=self.headers)
             self.parseHtml(response.text)
             print("get proxy success!")
 

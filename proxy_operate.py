@@ -2,13 +2,17 @@ import threading
 
 import pymysql
 import requests
+from requests.exceptions import ProxyError,ConnectTimeout
 
 
 class ProxyOperate(object):
     def __init__(self):
-        self.table_name = "xici3"
+        self.table_name = "train12306"
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.26 Safari/537.36 Core/1.63.5702.400 QQBrowser/10.2.1893.400',
+            'Host': r'kyfw.12306.cn',
+            'Referer': 'https://kyfw.12306.cn/otn/leftTicket/init',
+
         }
         self.conn = pymysql.connect(
             'localhost',
@@ -18,26 +22,29 @@ class ProxyOperate(object):
         )
         self.cursor = self.conn.cursor()
         self.threadLock = threading.Lock()
-        self.index = 0;
+        self.index = 0
 
     def getRandomIp(self):
         sql = "select * from {} where available=1 order by rand() limit 1".format(self.table_name)
         self.cursor.execute(sql)
         result = self.cursor.fetchone()
-        print(result)
-        print(result[-2].lower(), result[1], result[2])
         return result[-2].lower(), result[1], result[2]
 
     def judge_ip(self, http, ip, port):
-        test_url = 'https://www.baidu.com/'
+        test_url = 'https://kyfw.12306.cn/otn/leftTicket/queryZ'
         proxy_url = '{}://{}:{}'.format(http, ip, port)
         print(proxy_url)
         proxies = {
             http: proxy_url
         }
         try:
-            response = requests.get(test_url, headers=self.headers, proxies=proxies, timeout=2)
-
+            response = requests.get(test_url, headers=self.headers, proxies=proxies, timeout=3)
+        except ProxyError:
+            print("代理出错")
+            return False
+        except ConnectTimeout:
+            print("连接超时")
+            return False
         except Exception as e:
             print("代理 {}不可用".format(proxy_url))
             return False
@@ -54,7 +61,7 @@ class ProxyOperate(object):
         http, ip, port = self.getRandomIp()
         available = self.judge_ip(http, ip, port)
         if not available:
-            self.available_ip(ip)
+            self.disable_ip(ip)
             # self.delete_ip(ip)
 
     def checkAllProxy(self):
@@ -68,7 +75,7 @@ class ProxyOperate(object):
         for thread in threads:
             thread.join()
 
-    def available_ip(self, ip):
+    def disable_ip(self, ip):
         sql = "update {} set available={} where ip='{}'".format(self.table_name, 0, ip)
         self.cursor.execute(sql)
         self.conn.commit()
@@ -88,7 +95,7 @@ class ProxyOperate(object):
             available = self.judge_ip(result[-2].lower(), result[1], result[2])
             if not available:
                 self.threadLock.acquire()
-                self.available_ip(result[1])
+                self.disable_ip(result[1])
                 self.threadLock.release()
 
 
